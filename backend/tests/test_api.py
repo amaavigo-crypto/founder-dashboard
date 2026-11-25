@@ -5,6 +5,7 @@ os.environ["DATABASE_URL"] = f"sqlite:///{tempfile.mkdtemp()}/test.db"
 os.environ["FOUNDER_EMAIL"] = "f@example.com"
 os.environ["FOUNDER_PASSWORD"] = "pw12345"
 os.environ["PULL_SECRET"] = "sekret"
+os.environ["CRON_SECRET"] = "cronsekret"
 
 import httpx  # noqa: E402
 import pytest  # noqa: E402
@@ -95,3 +96,17 @@ def test_pull_stores_snapshot_and_reports_errors(client, auth):
 def test_internal_pull_needs_secret(client):
     assert client.post("/internal/pull").status_code == 401
     assert client.post("/internal/pull", headers={"X-Pull-Secret": "sekret"}).status_code == 200
+
+
+def test_vercel_cron_endpoint(client):
+    assert client.get("/api/cron/pull").status_code == 401
+    assert client.get("/api/cron/pull", headers={"Authorization": "Bearer wrong"}).status_code == 401
+    assert client.get("/api/cron/pull", headers={"Authorization": "Bearer cronsekret"}).status_code == 200
+
+
+def test_database_url_is_normalised():
+    from app.db import _normalise
+
+    assert _normalise("postgres://u:p@h/db") == "postgresql+psycopg://u:p@h/db"
+    assert _normalise("postgresql://u:p@h/db?sslmode=require") == "postgresql+psycopg://u:p@h/db?sslmode=require"
+    assert _normalise("sqlite:///x.db") == "sqlite:///x.db"

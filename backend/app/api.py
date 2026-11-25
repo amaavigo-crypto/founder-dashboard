@@ -105,9 +105,17 @@ def add_manual_money(body: ManualMoneyIn, _: Founder = Depends(current_founder),
     return {"id": row.id}
 
 
+@internal.get("/api/cron/pull")
+def vercel_cron_pull(authorization: str = Header(default=""), db: Session = Depends(get_db)):
+    """Called daily by Vercel Cron (see vercel.json). Vercel sends 'Authorization: Bearer <CRON_SECRET>'."""
+    if not settings.cron_secret or not hmac.compare_digest(authorization, f"Bearer {settings.cron_secret}"):
+        raise HTTPException(401, "Bad secret")
+    return pull_all(db)
+
+
 @internal.post("/internal/pull")
 def scheduled_pull(x_pull_secret: str = Header(default=""), db: Session = Depends(get_db)):
-    """Called nightly by cronjob.org with the PULL_SECRET header."""
+    """For any external scheduler (cronjob.org): POST with the PULL_SECRET header."""
     if not hmac.compare_digest(x_pull_secret, settings.pull_secret):
         raise HTTPException(401, "Bad secret")
     return pull_all(db)
